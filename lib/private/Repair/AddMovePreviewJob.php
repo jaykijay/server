@@ -8,6 +8,7 @@ namespace OC\Repair;
 
 use OC\Core\BackgroundJobs\PreviewMigrationJob;
 use OCP\BackgroundJob\IJobList;
+use OCP\IAppConfig;
 use OCP\Migration\IOutput;
 use OCP\Migration\IRepairStep;
 
