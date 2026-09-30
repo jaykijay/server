@@ -9,7 +9,9 @@ declare(strict_types=1);
 
 namespace OC\Preview;
 
+use OC\Files\ObjectStore\ObjectStoreStorage;
 use OC\Files\SimpleFS\SimpleFile;
+use OC\Files\Storage\Wrapper\Wrapper;
 use OC\Preview\Db\Preview;
 use OC\Preview\Db\PreviewMapper;
 use OC\Preview\Storage\StorageFactory;
@@ -107,7 +109,9 @@ class PreviewMigrationService {
 					$preview->setSourceMimeType($this->mimeTypeLoader->getMimetypeById((int)$result['mimetype']));
 					$preview->generateId();
 					try {
+						$this->storageFactory->migratePreviews([$preview]);
 						$preview = $this->previewMapper->insert($preview);
+						$this->connection->commit();
 					} catch (Exception $e) {
 						if ($e->getReason() !== Exception::REASON_UNIQUE_CONSTRAINT_VIOLATION) {
 							throw $e;
@@ -214,10 +218,8 @@ class PreviewMigrationService {
 
 		$this->connection->beginTransaction();
 		try {
+			$this->storageFactory->migratePreviews($previewsToInsert);
 			$this->previewMapper->insertMany($previewsToInsert);
-			foreach ($previewsToInsert as $preview) {
-				$this->storageFactory->migratePreview($preview);
-			}
 			$this->deleteOldFileCacheEntries($rowsToDelete);
 			$this->connection->commit();
 		} catch (\Exception $e) {
@@ -238,15 +240,28 @@ class PreviewMigrationService {
 	 */
 	private function deleteOrphanedPreviews(string $internalPath, array $entries): void {
 		$storage = $this->rootFolder->getMountPoint()->getStorage();
+		// Delete objects by urn directly, the filecache rows are removed in bulk below.
+		$objectStoreStorage = null;
+		if ($storage->instanceOfStorage(ObjectStoreStorage::class)) {
+			$objectStoreStorage = $storage instanceof Wrapper ? $storage->getInstanceOfStorage(ObjectStoreStorage::class) : $storage;
+		}
+
 		$fileIds = [];
 		foreach ($entries as $entry) {
 			try {
-				$storage->unlink($this->previewRootPath . $internalPath . '/' . $entry->getName());
+				if ($objectStoreStorage instanceof ObjectStoreStorage) {
+					$objectStoreStorage->getObjectStore()->deleteObject($objectStoreStorage->getURN($entry->getId()));
+				} else {
+					$storage->unlink($this->previewRootPath . $internalPath . '/' . $entry->getName());
+				}
 			} catch (\Exception $e) {
-				$this->logger->error('Unable to delete orphaned preview at ' . $internalPath . '/' . $entry->getName(), [
-					'exception' => $e,
-				]);
-				continue;
+				// An object that is already gone only leaves its filecache row to remove.
+				if ($e->getCode() !== 404) {
+					$this->logger->error('Unable to delete orphaned preview at ' . $internalPath . '/' . $entry->getName(), [
+						'exception' => $e,
+					]);
+					continue;
+				}
 			}
 			$fileIds[] = $entry->getId();
 		}
