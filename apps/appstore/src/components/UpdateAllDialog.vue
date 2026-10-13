@@ -47,13 +47,11 @@ const changelogText = computed(() => {
  */
 async function onUpdate() {
 	isUpdating.value = true
-	for (const app of props.apps) {
-		try {
-			await store.updateApp(app.id)
-		} catch (error) {
-			logger.error(`Failed to update app ${app.id}`, { error })
-			showError(t('appstore', 'Failed to update app {appName}', { appName: app.name }))
-		}
+	const appIds = props.apps.map((app) => app.id)
+	try {
+		await store.updateApps(appIds)
+	} catch (error) {
+		logger.error('Failed to update all apps', { error, appIds })
 	}
 	isUpdating.value = false
 	emit('close')
