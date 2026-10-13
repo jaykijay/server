@@ -1183,6 +1183,10 @@ class DefaultShareProvider implements
 	 * @return Share[] The updates shares if no update is found for a share return the original
 	 */
 	private function resolveGroupShares($shareMap, $userId, ?string $path = null, ?bool $forChildren = false) {
+		if ($shareMap === []) {
+			return [];
+		}
+
 		$qb = $this->dbConn->getQueryBuilder();
 		$query = $qb->select('*')
 			->from('share')
