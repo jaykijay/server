@@ -21,15 +21,22 @@ use NCU\Sharing\ShareUser;
 use NCU\Sharing\ShareUserStatus;
 use NCU\Sharing\Source\ShareSource;
 use OC\Core\Sharing\Permission\ReshareSharePermissionType;
+use OC\Route\Router;
 use OC\Sharing\SharingManager;
+use OC\URLGenerator;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\HintException;
+use OCP\ICacheFactory;
+use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\Interaction\Actions\ShareAction;
 use OCP\Interaction\InteractionRestrictedException;
 use OCP\Interaction\RestrictInteractionEvent;
+use OCP\IRequest;
+use OCP\IURLGenerator;
 use OCP\IUser;
 use OCP\IUserManager;
+use OCP\IUserSession;
 use OCP\L10N\IFactory;
 use OCP\Server;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -240,6 +247,20 @@ abstract class AbstractSharingManagerTests extends TestCase {
 		$this->registry->registerPermissionType(TestShareSourceType2::class, new TestSharePermissionType2());
 		$this->registry->markPermissionTypeCompatibleWithPermissionPreset(TestSharePermissionType2::class, TestSharePermissionPreset2::class);
 		$this->registry->registerPermissionType(null, Server::get(ReshareSharePermissionType::class));
+
+		$urlGenerator = $this->getMockBuilder(URLGenerator::class)
+			->onlyMethods(['getBaseUrl'])
+			->setConstructorArgs([
+				Server::get(IConfig::class),
+				Server::get(IUserSession::class),
+				Server::get(ICacheFactory::class),
+				Server::get(IRequest::class),
+				Server::get(Router::class),
+			])->getMock();
+		$urlGenerator->method('getBaseUrl')
+			->willReturn('http://localhost');
+
+		$this->overwriteService(IURLGenerator::class, $urlGenerator);
 	}
 
 	#[\Override]
